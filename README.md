@@ -1,2 +1,2 @@
 # Contrast
-GLSL data driven library
+GLSL data driven fragment shader library.
