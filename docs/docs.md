@@ -1,6 +1,12 @@
+## Pipeline
+
+
+
 ## TIME_
 ### Structs
+
 ### Functions
+
 ## MATH_
 ### Structs
 ### Functions
@@ -16,6 +22,9 @@
 ## COLOR_
 ### Structs
 ### Functions
+### Recomended Pipeline
+sRBG -> LsRGB -> OKLAB -> LsRGB -> sRGB
+
 ## FX_
 ### Structs
 ### Functions

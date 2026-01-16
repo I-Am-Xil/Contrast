@@ -21,8 +21,11 @@ const float TAU = 6.28318530717;
 
 const float FLOAT_ERROR = 1e-4;
 const float QSDF_MIN_GRAD = 1e-5;
-const float FLT_MAX = 3.402823466e+38;
+const float FLOTA_MAX = 3.402823466e+38;
 
+
+const vec2 MATH_DEFAULT_TRANSLATION_2D = vec2(0.0);
+const vec3 MATH_DEFAULT_TRANSLATION_3D = vec3(0.0);
 
 const mat2 MATH_IDENTITY_MATRIX_2D = mat2(1.0, 0.0,
                                           0.0, 1.0);
@@ -36,6 +39,8 @@ const mat4 MATH_IDENTITY_MATRIX_4D = mat4(1.0, 0.0, 0.0, 0.0,
                                           0.0, 0.0, 1.0, 0.0,
                                           0.0, 0.0, 0.0, 1.0);
 
+const uint MATH_TRANSFORM_ROT_TRANS = 0;
+const uint MATH_TRANSFORM_TRANS_ROT = 1;
 
 /***********************
     TEMPORAL CONTROL
@@ -131,37 +136,56 @@ MATH_PolarCoords MATH_GetUV2Polar(vec2 uv){
 struct MATH_Transform2D{
     mat2 rotation;
     vec2 translation;
+    uint order;
 };
 
-MATH_Transform2D MATH_SetTransform(mat2 rotation, vec2 translation){
-    return MATH_Transform2D(rotation, translation);
+MATH_Transform2D MATH_SetTransform(mat2 rotation, vec2 translation, uint order){
+    return MATH_Transform2D(rotation, translation, order);
+}
+
+MATH_Transform2D MATH_SetTransform(vec2 translation, uint order){
+    return MATH_Transform2D(MATH_IDENTITY_MATRIX_2D, translation, order);
 }
 
 MATH_Transform2D MATH_SetTransform(vec2 translation){
-    return MATH_Transform2D(MATH_IDENTITY_MATRIX_2D, translation);
+    return MATH_Transform2D(MATH_IDENTITY_MATRIX_2D, translation, MATH_TRANSFORM_ROT_TRANS);
+}
+
+MATH_Transform2D MATH_SetTransform(mat2 rotation, vec2 translation){
+    return MATH_Transform2D(rotation, translation, MATH_TRANSFORM_ROT_TRANS);
 }
 
 MATH_Transform2D MATH_SetTransform(mat2 rotation){
-    return MATH_Transform2D(rotation, vec2(0.0));
+    return MATH_Transform2D(rotation, MATH_DEFAULT_TRANSLATION_2D, MATH_TRANSFORM_ROT_TRANS);
 }
 
 
 struct MATH_Transform3D{
     mat3 rotation;
     vec3 translation;
+    uint order;
 };
 
-MATH_Transform3D MATH_SetTransform(mat3 rotation, vec3 translation){
-    return MATH_Transform3D(rotation, translation);
+MATH_Transform3D MATH_SetTransform(mat3 rotation, vec3 translation, uint order){
+    return MATH_Transform3D(rotation, translation, order);
 }
 
-MATH_Transform3D MATH_SetTransform(mat3 rotation){
-    return MATH_Transform3D(rotation, vec3(0.0));
+MATH_Transform3D MATH_SetTransform(vec3 translation, uint order){
+    return MATH_Transform3D(MATH_IDENTITY_MATRIX_3D, translation, order);
 }
 
 MATH_Transform3D MATH_SetTransform(vec3 translation){
-    return MATH_Transform3D(MATH_IDENTITY_MATRIX_3D, translation);
+    return MATH_Transform3D(MATH_IDENTITY_MATRIX_3D, translation, MATH_TRANSFORM_ROT_TRANS);
 }
+
+MATH_Transform3D MATH_SetTransform(mat3 rotation, vec3 translation){
+    return MATH_Transform3D(rotation, translation, MATH_TRANSFORM_ROT_TRANS);
+}
+
+MATH_Transform3D MATH_SetTransform(mat3 rotation){
+    return MATH_Transform3D(rotation, MATH_DEFAULT_TRANSLATION_3D, MATH_TRANSFORM_ROT_TRANS);
+}
+
 
 MATH_Transform2D MATH_GetTransformInverse(MATH_Transform2D T){
     MATH_Transform2D invT;
@@ -178,16 +202,33 @@ MATH_Transform3D MATH_GetTransformInverse(MATH_Transform3D T){
 }
 
 vec2 MATH_ApplyTransform(vec2 uv, MATH_Transform2D T){
-    vec2 uv0 = uv + T.translation;
-    uv0 = T.rotation*uv0;
-    return uv0;
+    vec2 uv0 = uv;
+    if (T.order == MATH_TRANSFORM_ROT_TRANS){
+        uv0 += T.translation;
+        uv0 = T.rotation*uv0;
+        return uv0;
+    }
+    if (T.order == MATH_TRANSFORM_TRANS_ROT){
+        uv0 = T.rotation*uv0;
+        uv0 += T.translation;
+        return uv0;
+    }
 }
 
-vec2 MATH_ApplyTransform2(vec2 uv, MATH_Transform2D T){
-    vec2 uv0 = T.rotation*uv;
-    uv0 += T.translation;
-    return uv0;
+vec3 MATH_ApplyTransform(vec3 uv, MATH_Transform3D T){
+    vec3 uv0;
+    if (T.order == MATH_TRANSFORM_ROT_TRANS){
+        uv0 = uv + T.translation;
+        uv0 = T.rotation*uv0;
+        return uv0;
+    }
+    if (T.order == MATH_TRANSFORM_TRANS_ROT){
+        uv0 = T.rotation*uv0;
+        uv0 = uv + T.translation;
+        return uv0;
+    }
 }
+
 
 float MATH_ScalarProj(vec2 a, vec2 b){
     return dot(a, b)/dot(b, b);
@@ -218,8 +259,6 @@ vec3 MATH_Quantize(vec3 x, float step){
     return floor(x * step)/step;
 }
 
-
-
 float MATH_Remap01(float x, float lowIn, float highIn){
     return (x - lowIn) / (highIn - lowIn);
 }
@@ -227,6 +266,18 @@ float MATH_Remap01(float x, float lowIn, float highIn){
 float MATH_NormalDistribution(float value){
     return exp(-value*value) / sqrt(2*PI);
 }
+
+vec3 MATH_Pow(vec3 x, float r){
+    return sign(x)*pow(abs(x), vec3(r));
+}
+
+vec3 MATH_Cbrt(vec3 x){
+    return sign(x)*pow(abs(x), vec3(1.0/3.0));
+}
+
+
+
+
 
 
 
@@ -383,6 +434,24 @@ struct SDF_RoundedBox{
 };
 
 
+float SDF_Intersection(float sdf1, float sdf2){
+    return max(sdf1, sdf2);
+}
+
+float SDF_Union(float sdf1, float sdf2){
+    return min(sdf1, sdf2);
+}
+
+float SDF_Subtraction(float sdf1, float sdf2){
+    return max(-sdf1, sdf2);
+}
+
+float SDF_Xor(float sdf1, float sdf2){
+    return max(min(sdf1, sdf2), -max(sdf1, sdf2));
+}
+
+
+
 
 /***********************
        QUASI-SDFs 
@@ -448,6 +517,96 @@ float MASK_HardEdge(MASK_Profile m){
     COLOR OPERATIONS 
 ***********************/
 
+//INFO: SRGB -> LRGB -> OKLAB -> LRGB -> SRGB
+
+struct COLOR_SRGB{
+    vec3 rgb;
+};
+
+struct COLOR_LSRGB{
+    vec3 rgb;
+};
+
+COLOR_LSRGB COLOR_SRGBtoLRGB(COLOR_SRGB c){
+    vec3 high = pow((c.rgb + 0.055) / 1.055, vec3(2.4));
+    vec3 low = c.rgb / 12.92;
+    vec3 mask = step(vec3(0.04045), c.rgb);
+    return COLOR_LSRGB(mix(low, high, mask));
+}
+
+COLOR_SRGB COLOR_LSRGBtoSRGB(COLOR_LSRGB c){
+    vec3 high = 1.055 * pow(c.rgb, vec3(1.0/2.4)) - 0.055;
+    vec3 low = c.rgb * 12.92;
+    vec3 mask = step(vec3(0.0031308), c.rgb);
+    return COLOR_SRGB(mix(low, high, mask));
+}
+
+struct COLOR_XYZ{
+    vec3 xyz;
+};
+
+struct COLOR_HSV{
+    vec3 hsv;
+};
+
+struct COLOR_HSL{
+    vec3 hsl;
+};
+
+struct COLOR_OKLAB{
+    vec3 lab;
+};
+
+COLOR_OKLAB COLOR_LSRGBtoOKLAB(COLOR_LSRGB c){
+    //NOTE: GLSL is column major. the m1 and m2 matrices are transposed to align with column representation.
+    mat3 m1 = mat3(0.4122214708, 0.2119034982, 0.0883024619,
+                   0.5363325363, 0.6806995451, 0.2817188376,
+                   0.0514459929, 0.1073969566, 0.6299787005);
+    vec3 lms = m1*c.rgb;
+    vec3 lms_ = MATH_Cbrt(lms);
+    mat3 m2 = mat3(0.2104542553,  1.9779984951,  0.0259040371,
+                   0.7936177850, -2.4285922050,  0.7827717662,
+                   -0.0040720468, 0.4505937099, -0.8086757660);
+    return COLOR_OKLAB(m2*lms_);
+}
+
+COLOR_LSRGB COLOR_OKLABto_LSRGB(COLOR_OKLAB c){
+    //NOTE: GLSL is column major. the m1 and m2 matrices are transposed to align with column representation.
+    mat3 m1 = mat3(1.0,           1.0,           1.0,
+                   0.3963377774, -0.1055613458, -0.0894841775,
+                   0.2158037573, -0.0638541728, -1.2914855480);
+    vec3 lms_ = m1*c.lab;
+    vec3 lms = pow(lms_, vec3(3.0));
+    mat3 m2 = mat3( 4.0767416621, -1.2684380046, -0.0041960863,
+                   -3.3077115913,  2.6097574011, -0.7034186147,
+                   0.2309699292, -0.3413193965,  1.7076147010);
+    return COLOR_LSRGB(m2*lms);
+}
+
+struct COLOR_OKHSV{
+    vec3 hsv;
+};
+
+struct COLOR_OKHSL{
+    vec3 hsl;
+};
+
+COLOR_SRGB COLOR_Mix(COLOR_SRGB c, COLOR_SRGB c0, float a){
+    return COLOR_SRGB(mix(c.rgb, c0.rgb, a));
+}
+
+COLOR_LSRGB COLOR_Mix(COLOR_LSRGB c, COLOR_LSRGB c0, float a){
+    return COLOR_LSRGB(mix(c.rgb, c0.rgb, a));
+}
+
+COLOR_OKLAB COLOR_Mix(COLOR_OKLAB c, COLOR_OKLAB c0, float a){
+    return COLOR_OKLAB(mix(c.lab, c0.lab, a));
+}
+
+
+
+
+
 
 vec3 COLOR_GammaCurve(vec3 color, vec3 gamma){
     return pow(color, gamma);
@@ -457,22 +616,22 @@ vec3 COLOR_PaletteCosine(vec3 brightness, vec3 contrast, vec3 amplitude, vec3 hu
     return brightness + contrast*(cos(TAU*(amplitude*t + hue)));
 }
 
-vec3 COLOR_PaletteTurbo(vec3 brightness, vec3 contrast, vec3 amplitude, vec3 hue, float t){
-    return brightness + contrast*(cos(TAU*(amplitude*t + hue)));
+vec3 COLOR_MapTurbo(float t){
+    const vec3 c0 = vec3(0.1140890109226559, 0.06288340699912215, 0.2248337216805064); const vec3 c1 = vec3(6.716419496985708, 3.182286745507602, 7.571581586103393); const vec3 c2 = vec3(-66.09402360453038, -4.9279827041226, -10.09439367561635); const vec3 c3 = vec3(228.7660791526501, 25.04986699771073, -91.54105330182436); const vec3 c4 = vec3(-334.8351565777451, -69.31749712757485, 288.5858850615712); const vec3 c5 = vec3(218.7637218434795, 67.52150567819112, -305.2045772184957); const vec3 c6 = vec3(-52.88903478218835, -21.54527364654712, 110.5174647748972);
+    return c0+t*(c1+t*(c2+t*(c3+t*(c4+t*(c5+t*c6))))); // turbo
 }
 
-vec3 COLOR_PaletteViridis(vec3 brightness, vec3 contrast, vec3 amplitude, vec3 hue, float t){
-    return brightness + contrast*(cos(TAU*(amplitude*t + hue)));
+vec3 COLOR_MapViridis(float t){
+    const vec3 c0 = vec3(0.2777273272234177, 0.005407344544966578, 0.3340998053353061); const vec3 c1 = vec3(0.1050930431085774, 1.404613529898575, 1.384590162594685); const vec3 c2 = vec3(-0.3308618287255563, 0.214847559468213, 0.09509516302823659); const vec3 c3 = vec3(-4.634230498983486, -5.799100973351585, -19.33244095627987); const vec3 c4 = vec3(6.228269936347081, 14.17993336680509, 56.69055260068105); const vec3 c5 = vec3(4.776384997670288, -13.74514537774601, -65.35303263337234); const vec3 c6 = vec3(-5.435455855934631, 4.645852612178535, 26.3124352495832);
+    return c0+t*(c1+t*(c2+t*(c3+t*(c4+t*(c5+t*c6))))); // viridis
 }
-
-
 
 void main(){
     vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / u_resolution.y;
 
     float shape = 0.0;
 
-    MATH_Transform2D transform = MATH_SetTransform(MATH_IDENTITY_MATRIX_2D);
+    MATH_Transform2D transform = MATH_SetTransform(MATH_Rotation2D(u_time), vec2(0.1));
     //transform = MATH_SetTransform(MATH_Rotation2D(u_time));
     transform = MATH_GetTransformInverse(transform);
 
@@ -500,18 +659,31 @@ void main(){
     SDF_Triangle triangle = SDF_SetInfoTriangle(triangleVertex, transform);
     shape = SDF_EvalTriangle(uv, triangle);
 
+    //shape = MATH_NormalDistribution(uv.x)-uv.y;
 
-    shape = MATH_NormalDistribution(uv.x)-uv.y;
-    MASK_Profile mask = MASK_SetInfoProfile(abs(shape), 0.0, 0.01);
+    //shape = SDF_Intersection(SDF_EvalCircle(uv, circle), SDF_EvalCircle(uv-0.1, circle));
+
+    MASK_Profile mask = MASK_SetInfoProfile(shape, 0.01, 0.05);
 
     vec3 color = vec3(0.0);
     color = vec3(MASK_SoftEdge(mask));
+
+    //vec3(0.556, 0.280, 0.738), vec3(0.941, 0.504, 0.558), vec3(0.935, 0.781, 0.071), vec3(5.902, 5.607, 2.693)
+
+    //color = COLOR_PaletteCosine(vec3(0.556, 0.280, 0.738), vec3(0.941, 0.504, 0.558), vec3(0.935, 0.781, 0.071), vec3(5.902, 5.607, 2.693), uv.x+u_time);
+
+    //color = COLOR_MapTurbo(0.5+uv.x);
+    //color = COLOR_MapViridis(0.4+uv.x);
+
+    //color = COLOR_Palette(vec3(0.556, 0.280, 0.738), vec3(0.941, 0.504, 0.558), vec3(0.935, 0.781, 0.071), vec3(5.902, 5.607, 2.693), uv.x+u_time);
+
 
 
     float gamma = 3.25 + 0.25*sin(u_time);
     //color = vec3(uv, 0.0);
     //color = FX_GammaCurve(color, gamma);
-    color = vec3(MASK_HardEdge(mask));
+    //color = vec3(MASK_HardEdge(mask));
+    //color = vec3(MASK_SoftEdge(mask));
     //color = vec3(shape);
 
     fragColor = vec4(color, 1.0);
