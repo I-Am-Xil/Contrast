@@ -12,6 +12,9 @@ uniform vec2 u_resolution;
 uniform vec2 u_mouse;
 
 
+uniform sampler2D u_tex0;
+uniform vec2 u_tex0Resolution;
+
 /***********************
     SCALAR CONSTANTS
 ***********************/
@@ -570,7 +573,7 @@ COLOR_OKLAB COLOR_LSRGBtoOKLAB(COLOR_LSRGB c){
     return COLOR_OKLAB(m2*lms_);
 }
 
-COLOR_LSRGB COLOR_OKLABto_LSRGB(COLOR_OKLAB c){
+COLOR_LSRGB COLOR_OKLABtoLSRGB(COLOR_OKLAB c){
     //NOTE: GLSL is column major. the m1 and m2 matrices are transposed to align with column representation.
     mat3 m1 = mat3(1.0,           1.0,           1.0,
                    0.3963377774, -0.1055613458, -0.0894841775,
@@ -582,6 +585,35 @@ COLOR_LSRGB COLOR_OKLABto_LSRGB(COLOR_OKLAB c){
                    0.2309699292, -0.3413193965,  1.7076147010);
     return COLOR_LSRGB(m2*lms);
 }
+
+COLOR_OKLAB COLOR_Saturation(COLOR_OKLAB c){
+    COLOR_OKLAB c0 = c;
+    c0.lab.gb = vec2(0.0);
+    return c0;
+}
+
+struct COLOR_OKLCH{
+    vec3 lch;
+};
+
+COLOR_OKLCH COLOR_OKLABtoOKLCH(COLOR_OKLAB c){
+    COLOR_OKLCH c0;
+    c0.lch.r = c.lab.r;
+    c0.lch.g = length(c.lab.rg);
+    c0.lch.b = atan(c.lab.g, c.lab.b);
+    return c0;
+}
+
+COLOR_OKLAB COLOR_OKLCHtoOKLAB(COLOR_OKLCH c){
+    COLOR_OKLAB c0;
+    c0.lab.r = c.lch.r;
+    c0.lab.g = c.lch.g*cos(c.lch.b);
+    c0.lab.b = c.lch.g*sin(c.lch.b);
+    return c0;
+}
+
+
+
 
 struct COLOR_OKHSV{
     vec3 hsv;
@@ -626,8 +658,10 @@ vec3 COLOR_MapViridis(float t){
     return c0+t*(c1+t*(c2+t*(c3+t*(c4+t*(c5+t*c6))))); // viridis
 }
 
+
+
 void main(){
-    vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / u_resolution.y;
+    vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / min(u_resolution.y, u_resolution.x);
 
     float shape = 0.0;
 
@@ -677,14 +711,76 @@ void main(){
 
     //color = COLOR_Palette(vec3(0.556, 0.280, 0.738), vec3(0.941, 0.504, 0.558), vec3(0.935, 0.781, 0.071), vec3(5.902, 5.607, 2.693), uv.x+u_time);
 
-
-
     float gamma = 3.25 + 0.25*sin(u_time);
     //color = vec3(uv, 0.0);
     //color = FX_GammaCurve(color, gamma);
     //color = vec3(MASK_HardEdge(mask));
     //color = vec3(MASK_SoftEdge(mask));
     //color = vec3(shape);
+
+
+    vec3 rainbow = COLOR_PaletteCosine(vec3(0.50, 0.50, 0.50), vec3(0.50, 0.50, 0.50), vec3(1.00, 1.00, 1.00), vec3(0.00, 0.33, 0.67), (uv.x+PI)/2.0);
+    COLOR_SRGB srgb = COLOR_SRGB(rainbow);
+    COLOR_LSRGB lsrgb = COLOR_SRGBtoLRGB(srgb);
+    COLOR_OKLAB oklab = COLOR_LSRGBtoOKLAB(lsrgb);
+    COLOR_LSRGB lsrgb_ = COLOR_OKLABtoLSRGB(oklab);
+    COLOR_SRGB srgb_ = COLOR_LSRGBtoSRGB(lsrgb_);
+
+    //color = srgb.rgb;
+    //color = lsrgb.rgb;
+    //color = oklab.lab;
+    //color = lsrgb_.rgb;
+    //color = srgb_.rgb;
+
+    COLOR_SRGB srgbRed = COLOR_SRGB(vec3(1.0, 0.0, 0.0));
+    COLOR_SRGB srgbBlue = COLOR_SRGB(vec3(0.0, 0.0, 1.0));
+    COLOR_LSRGB lsrgbRed = COLOR_SRGBtoLRGB(srgbRed);
+    COLOR_LSRGB lsrgbBlue = COLOR_SRGBtoLRGB(srgbBlue);
+    COLOR_OKLAB oklabRed = COLOR_LSRGBtoOKLAB(lsrgbRed);
+    COLOR_OKLAB oklabBlue = COLOR_LSRGBtoOKLAB(lsrgbBlue);
+
+    COLOR_SRGB srgbMix = COLOR_Mix(srgbRed, srgbBlue, (uv.x+1.0)/2.0);
+    color = srgbMix.rgb*step(2.0/3.0, uv.y/2.0 + 0.5);
+
+    COLOR_LSRGB lsrgbMix = COLOR_Mix(lsrgbRed, lsrgbBlue, (uv.x+1.0)/2.0);
+    COLOR_SRGB lsrgbMixOut = COLOR_LSRGBtoSRGB(lsrgbMix);
+    color += lsrgbMixOut.rgb*min(step(1.0/3.0, uv.y/2.0+0.5), step(2.0/3.0, 1.0-uv.y));
+
+    COLOR_OKLAB oklabMix = COLOR_Mix(oklabRed, oklabBlue, (uv.x+1.0)/2.0);
+    COLOR_LSRGB oklabMix_ = COLOR_OKLABtoLSRGB(oklabMix);
+    COLOR_SRGB oklabMixOut = COLOR_LSRGBtoSRGB(oklabMix_);
+    color += oklabMixOut.rgb*step(0.0/3.0, uv.y/2.0+0.5)*step(1.0/3.0, -uv.y);
+
+
+    vec4 textureColor = texture(u_tex0, vec2(uv.x, uv.y*(u_tex0Resolution.x/u_tex0Resolution.y))/2.0+0.5);
+
+    //vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / u_resolution.y;
+    //color = textureColor.rgb;
+
+    //COLOR_SRGB texture_ = COLOR_SRGB(color);
+    //COLOR_LSRGB texture_1 = COLOR_SRGBtoLRGB(texture_);
+    //COLOR_OKLAB texture_2 = COLOR_LSRGBtoOKLAB(texture_1);
+    //texture_2 = COLOR_Saturation(texture_2);
+    //texture_1 = COLOR_OKLABtoLSRGB(texture_2);
+    //texture_ = COLOR_LSRGBtoSRGB(texture_1);
+
+    //float desaturationAmount = smoothstep(0.3, 1.0, length(vec2(uv.x, uv.y+0.05))*0.75)-0.2;
+    //desaturationAmount = 1.0;
+    //vec3 finalColor = mix(textureColor.rgb, texture_.rgb, desaturationAmount);
+    //color = finalColor;
+
+    ////NOTE: Desaturate by zeroing ab in OKLAB gives better results. The dot product loses texture at reds and oranges.
+    //float luminance = dot(textureColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+    //vec3 gray = vec3(luminance);
+    //finalColor = mix(textureColor.rgb, gray, desaturationAmount);
+    ////color = finalColor;
+
+    //COLOR_OKLCH oklch = COLOR_OKLCH(vec3(0.4, 0.12, uv.x*PI));
+    //COLOR_OKLAB oklch0 = COLOR_OKLCHtoOKLAB(oklch);
+    //COLOR_LSRGB oklch1 = COLOR_OKLABtoLSRGB(oklch0);
+    //COLOR_SRGB oklch2 = COLOR_LSRGBtoSRGB(oklch1);
+    //color = oklch2.rgb;
+
 
     fragColor = vec4(color, 1.0);
 }
