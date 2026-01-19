@@ -282,9 +282,6 @@ vec3 MATH_Cbrt(vec3 x){
 
 
 
-
-
-
 /***********************
           SDFs 
 ***********************/
@@ -663,6 +660,8 @@ vec3 COLOR_MapViridis(float t){
 void main(){
     vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / min(u_resolution.y, u_resolution.x);
 
+    //NOTE: SDFs
+
     float shape = 0.0;
 
     MATH_Transform2D transform = MATH_SetTransform(MATH_Rotation2D(u_time), vec2(0.1));
@@ -694,8 +693,10 @@ void main(){
     shape = SDF_EvalTriangle(uv, triangle);
 
     //shape = MATH_NormalDistribution(uv.x)-uv.y;
-
     //shape = SDF_Intersection(SDF_EvalCircle(uv, circle), SDF_EvalCircle(uv-0.1, circle));
+
+
+    //NOTE: Masks
 
     MASK_Profile mask = MASK_SetInfoProfile(shape, 0.01, 0.05);
 
@@ -719,12 +720,17 @@ void main(){
     //color = vec3(shape);
 
 
+    //NOTE: Color Palettes 
+
     vec3 rainbow = COLOR_PaletteCosine(vec3(0.50, 0.50, 0.50), vec3(0.50, 0.50, 0.50), vec3(1.00, 1.00, 1.00), vec3(0.00, 0.33, 0.67), (uv.x+PI)/2.0);
     COLOR_SRGB srgb = COLOR_SRGB(rainbow);
     COLOR_LSRGB lsrgb = COLOR_SRGBtoLRGB(srgb);
     COLOR_OKLAB oklab = COLOR_LSRGBtoOKLAB(lsrgb);
     COLOR_LSRGB lsrgb_ = COLOR_OKLABtoLSRGB(oklab);
     COLOR_SRGB srgb_ = COLOR_LSRGBtoSRGB(lsrgb_);
+
+
+    //NOTE: Color spaces
 
     //color = srgb.rgb;
     //color = lsrgb.rgb;
@@ -752,34 +758,38 @@ void main(){
     color += oklabMixOut.rgb*step(0.0/3.0, uv.y/2.0+0.5)*step(1.0/3.0, -uv.y);
 
 
+    //NOTE: Image saturation
+
     vec4 textureColor = texture(u_tex0, vec2(uv.x, uv.y*(u_tex0Resolution.x/u_tex0Resolution.y))/2.0+0.5);
 
-    //vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / u_resolution.y;
-    //color = textureColor.rgb;
+    color = textureColor.rgb;
 
-    //COLOR_SRGB texture_ = COLOR_SRGB(color);
-    //COLOR_LSRGB texture_1 = COLOR_SRGBtoLRGB(texture_);
-    //COLOR_OKLAB texture_2 = COLOR_LSRGBtoOKLAB(texture_1);
-    //texture_2 = COLOR_Saturation(texture_2);
-    //texture_1 = COLOR_OKLABtoLSRGB(texture_2);
-    //texture_ = COLOR_LSRGBtoSRGB(texture_1);
+    COLOR_SRGB texture_ = COLOR_SRGB(color);
+    COLOR_LSRGB texture_1 = COLOR_SRGBtoLRGB(texture_);
+    COLOR_OKLAB texture_2 = COLOR_LSRGBtoOKLAB(texture_1);
+    texture_2 = COLOR_Saturation(texture_2);
+    texture_1 = COLOR_OKLABtoLSRGB(texture_2);
+    texture_ = COLOR_LSRGBtoSRGB(texture_1);
 
-    //float desaturationAmount = smoothstep(0.3, 1.0, length(vec2(uv.x, uv.y+0.05))*0.75)-0.2;
-    //desaturationAmount = 1.0;
-    //vec3 finalColor = mix(textureColor.rgb, texture_.rgb, desaturationAmount);
+    float desaturationAmount = smoothstep(0.3, 1.0, length(vec2(uv.x, uv.y+0.05))*0.75)-0.2;
+    desaturationAmount = -0.2;
+    desaturationAmount = 0.0;
+    desaturationAmount = 1.0;
+    vec3 finalColor = mix(textureColor.rgb, texture_.rgb, desaturationAmount);
+    color = finalColor;
+
+    //NOTE: Desaturate by zeroing ab in OKLAB gives better results by preserving better luminance. The dot product loses texture at reds and oranges.
+    float luminance = dot(textureColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+    vec3 gray = vec3(luminance);
+    finalColor = mix(textureColor.rgb, gray, desaturationAmount);
     //color = finalColor;
-
-    ////NOTE: Desaturate by zeroing ab in OKLAB gives better results. The dot product loses texture at reds and oranges.
-    //float luminance = dot(textureColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-    //vec3 gray = vec3(luminance);
-    //finalColor = mix(textureColor.rgb, gray, desaturationAmount);
-    ////color = finalColor;
 
     //COLOR_OKLCH oklch = COLOR_OKLCH(vec3(0.4, 0.12, uv.x*PI));
     //COLOR_OKLAB oklch0 = COLOR_OKLCHtoOKLAB(oklch);
     //COLOR_LSRGB oklch1 = COLOR_OKLABtoLSRGB(oklch0);
     //COLOR_SRGB oklch2 = COLOR_LSRGBtoSRGB(oklch1);
     //color = oklch2.rgb;
+
 
 
     fragColor = vec4(color, 1.0);
